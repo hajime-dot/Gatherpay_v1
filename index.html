@@ -74,7 +74,18 @@
     <div class="section">
         <h3>新增消費</h3>
         <input type="text" id="m-desc" placeholder="項目 (例如: 晚餐)">
-        <input type="number" id="m-amt" placeholder="金額 (HK$)">
+        
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <select id="m-currency" style="width: 35%;" onchange="previewHKD()">
+                <option value="HKD">HKD</option>
+                <option value="JPY">JPY (日元)</option>
+                <option value="TWD">TWD (台幣)</option>
+                <option value="CNY">RMB (人民幣)</option>
+            </select>
+            <input type="number" id="m-amt" placeholder="金額" style="width: 65%;" onkeyup="previewHKD()">
+        </div>
+        <div id="rate-preview" style="font-size: 13px; color: #e67e22; margin-bottom: 10px; min-height: 18px;"></div>
+        
         <select id="m-payer"></select>
         
         <div style="margin-top: 15px;">
@@ -98,7 +109,7 @@
     </div>
 
     <div class="section">
-        <h3>結算清單</h3>
+        <h3>結算清單 (以 HKD 計算)</h3>
         <div id="resolve-list" style="margin-bottom: 20px; line-height: 1.8; font-size: 15px;"></div>
         <button class="btn-whatsapp" onclick="shareSettlement()">WhatsApp 分享結算單</button>
         
@@ -127,16 +138,20 @@
         // === 2. Global Variables ===
         const members = [
             "水", "柏", "舊", "輝", "鏗", "琳", "JOVI", "吹", 
-            "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN"
-        ];
+            "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN", "健"
+        ]; // Added "健"
         
         let allGatherings = [];
         let currentGathering = localStorage.getItem('lastGathering') || "預設活動";
         let expenses = [];
         let unsubscribe = null;
+        
+        // Exchange Rates (Fallback values, updated on init)
+        let exchangeRates = { HKD: 1, JPY: 19.5, TWD: 4.1, CNY: 0.92 };
 
         // --- App Init ---
-        function init() {
+        async function init() {
+            await fetchRates();
             setupMoneyUI();
 
             // Listen to Gathering List
@@ -156,6 +171,38 @@
                 renderGatheringSelect();
                 listenToExpenses(currentGathering);
             });
+        }
+        
+        // --- Fetch Live Exchange Rates ---
+        async function fetchRates() {
+            try {
+                // Using an open API that uses USD as base, we calculate relative to HKD
+                const res = await fetch('https://open.er-api.com/v6/latest/HKD');
+                const data = await res.json();
+                if(data && data.rates) {
+                    exchangeRates.JPY = data.rates.JPY;
+                    exchangeRates.TWD = data.rates.TWD;
+                    exchangeRates.CNY = data.rates.CNY; // API uses CNY for RMB
+                }
+            } catch (e) {
+                console.warn("API 獲取匯率失敗，將使用系統預設匯率。");
+            }
+        }
+
+        // --- UI Interactions ---
+        window.previewHKD = function() {
+            const curr = document.getElementById('m-currency').value;
+            const amt = parseFloat(document.getElementById('m-amt').value);
+            const previewDiv = document.getElementById('rate-preview');
+            
+            if (isNaN(amt) || curr === 'HKD') {
+                previewDiv.innerHTML = '';
+                return;
+            }
+            
+            const rate = exchangeRates[curr];
+            const hkdAmt = amt / rate;
+            previewDiv.innerHTML = `🔄 實時匯率: 1 HKD = ${rate.toFixed(4)} ${curr === 'CNY' ? 'RMB' : curr} (折合約 <b>HK$${hkdAmt.toFixed(1)}</b>)`;
         }
 
         // --- Event/Gathering Management ---
@@ -222,20 +269,39 @@
 
         window.addExpense = function() {
             const desc = document.getElementById('m-desc').value;
-            const amt = parseFloat(document.getElementById('m-amt').value);
+            const originalAmt = parseFloat(document.getElementById('m-amt').value);
+            const currency = document.getElementById('m-currency').value;
             const payer = document.getElementById('m-payer').value;
             const targets = Array.from(document.querySelectorAll('.check-item.checked')).map(e => e.dataset.name);
             
-            if(!desc || isNaN(amt) || payer === '請選擇付款人...') return alert('請填寫完整項目、金額及付款人');
+            if(!desc || isNaN(originalAmt) || payer === '請選擇付款人...') return alert('請填寫完整項目、金額及付款人');
             if(targets.length === 0) return alert('請至少選擇一人分擔');
 
+            // Calculate HKD Amount based on rate
+            let rate = 1;
+            let hkdAmt = originalAmt;
+            if (currency !== 'HKD') {
+                rate = exchangeRates[currency];
+                hkdAmt = originalAmt / rate;
+            }
+
             const newId = Date.now();
-            const newExpense = { id: newId, desc, amt, payer, targets };
+            const newExpense = { 
+                id: newId, 
+                desc, 
+                amt: hkdAmt, // The final math is ALWAYS done in HKD
+                originalAmt, 
+                currency: currency === 'CNY' ? 'RMB' : currency, 
+                rate, 
+                payer, 
+                targets 
+            };
 
             set(ref(db, `huatai_gatherpay/gatherings/${currentGathering}/expenses/${newId}`), newExpense);
 
             document.getElementById('m-desc').value = '';
             document.getElementById('m-amt').value = '';
+            document.getElementById('rate-preview').innerHTML = '';
         }
 
         window.delExp = (id) => {
@@ -263,7 +329,6 @@
             
             if (prevExp.length === 0) return alert('該活動沒有任何消費紀錄！');
 
-            // Recalculate previous balances
             let bals = {}; 
             members.forEach(m => bals[m] = 0);
             
@@ -273,7 +338,6 @@
                 e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
             });
 
-            // Handle Couple logic just for calculation
             let coupleSum = (bals['琪'] || 0) + (bals['SEAN'] || 0);
             let resolveList = [];
             Object.keys(bals).forEach(m => {
@@ -286,21 +350,22 @@
 
             let newExpenses = [];
             
-            // Map debts to New Expenses
             debtors.forEach(d => {
                 let debtAmt = Math.abs(d.val);
                 creditors.forEach(c => {
                     if(debtAmt < 0.1 || c.val < 0.1) return;
                     let settle = Math.min(debtAmt, c.val);
                     
-                    // Un-merge couple name to real names so standard algorithm doesn't break
                     let realTargets = d.name === '琪 & SEAN ❤️' ? ['琪', 'SEAN'] : [d.name];
-                    let creditorName = c.name === '琪 & SEAN ❤️' ? '琪' : c.name; // Creditor defaults to 琪 if it's the couple
+                    let creditorName = c.name === '琪 & SEAN ❤️' ? '琪' : c.name; 
                     
                     newExpenses.push({
                         id: Date.now() + Math.floor(Math.random() * 1000),
                         desc: `📌 結欠匯入 (${prev})`,
                         amt: settle,
+                        originalAmt: settle,
+                        currency: 'HKD',
+                        rate: 1,
                         payer: creditorName,
                         targets: realTargets
                     });
@@ -314,7 +379,6 @@
                 return alert('該活動已經全部結清，沒有任何人有欠款！');
             }
 
-            // Push to current gathering
             if (confirm(`找到 ${newExpenses.length} 筆結欠紀錄，準備匯入至「${currentGathering}」。確定嗎？`)) {
                 newExpenses.forEach(exp => {
                     set(ref(db, `huatai_gatherpay/gatherings/${currentGathering}/expenses/${exp.id}`), exp);
@@ -346,12 +410,19 @@
                 const split = e.amt / e.targets.length;
                 e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
                 
+                // Extra UI string to show original foreign currency if applicable
+                let currencyInfo = '';
+                if (e.currency && e.currency !== 'HKD') {
+                    currencyInfo = `<br><span style="color:#95a5a6; font-size: 12px;">(原幣: ${e.currency} ${e.originalAmt} @ 匯率 ${e.rate.toFixed(4)})</span>`;
+                }
+
                 list.innerHTML += `
                     <div class="history-row">
                         <div style="font-size:14px; line-height: 1.4;">
                             <b>${e.desc}</b> <br>
                             <span style="color:#27ae60; font-weight:bold;">HK$${e.amt.toFixed(1)}</span> 
                             <span style="color:#7f8c8d; font-size: 12px;">(付款: ${e.payer})</span>
+                            ${currencyInfo}
                         </div>
                         <div class="delete-btn" onclick="delExp(${e.id})">刪除</div>
                     </div>`;
@@ -408,6 +479,7 @@
             window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
         }
 
+        // Boot up
         init();
     </script>
 </body>
