@@ -1,272 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GatherPay 💸</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .friend-btn { @apply px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white hover:bg-indigo-50 transition-colors; }
-        .friend-btn.selected { @apply bg-indigo-600 text-white border-indigo-600; }
-        .action-btn { @apply text-[10px] font-bold px-2 py-1 rounded bg-slate-200 text-slate-700 uppercase hover:bg-slate-300; }
-    </style>
-</head>
-<body class="bg-slate-50 p-3 font-sans text-slate-900">
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-5 border border-slate-100">
-        <h1 class="text-3xl font-extrabold text-center text-indigo-600 mb-6">GatherPay</h1>
+    // === 1. Firebase Configuration ===
+    const firebaseConfig = {
+        apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
+        authDomain: "gatherpay-5f59b.firebaseapp.com",
+        databaseURL: "https://gatherpay-5f59b-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "gatherpay-5f59b",
+        storageBucket: "gatherpay-5f59b.firebasestorage.app",
+        messagingSenderId: "827437997271",
+        appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
+    };
 
-        <div class="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-            <select id="gatheringSelect" class="w-full p-2 bg-white border rounded-lg mb-3 shadow-sm text-sm" onchange="window.loadGathering()">
-                <option value="">-- Choose Gathering --</option>
-            </select>
-            <div class="flex gap-2">
-                <input type="text" id="newGatheringName" placeholder="New Event (e.g. Hotpot)" class="flex-1 p-2 border rounded-lg text-sm">
-                <button onclick="window.createNewGathering()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm">Create</button>
-            </div>
-        </div>
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dataRef = ref(db, 'kaohsiung_trip/expenses');
 
-        <div id="expenseSection" class="hidden space-y-5 border-t pt-5">
-            <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                    <input type="text" id="itemName" placeholder="Item (e.g. Didi)" class="p-3 border rounded-lg text-sm col-span-1">
-                    <input type="number" id="itemCost" placeholder="Cost ($)" class="p-3 border rounded-lg text-sm col-span-1">
-                </div>
-                
-                <div>
-                    <label class="text-[11px] font-bold text-slate-500 mb-2 block uppercase tracking-wider">1. Who Paid?</label>
-                    <input type="hidden" id="whoPaid">
-                    <div id="paidList" class="flex flex-wrap gap-2"></div>
-                </div>
+    // === 2. Updated Member List ===
+    const members = [
+        "水", "柏", "舊", "輝", "鏗", "琳", "JOVI", "吹", 
+        "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN"
+    ];
+    let expenses = [];
 
-                <div>
-                    <div class="flex justify-between items-end mb-2">
-                        <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">2. Who Shares?</label>
-                        <div class="flex gap-2">
-                            <button onclick="window.bulkSelect(true)" class="action-btn">Select All</button>
-                            <button onclick="window.bulkSelect(false)" class="action-btn text-red-600">Clear</button>
-                        </div>
-                    </div>
-                    <div id="sharesList" class="flex flex-wrap gap-2"></div>
-                </div>
-            </div>
-            
-            <button onclick="window.addExpense()" class="w-full bg-green-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-green-100 active:scale-95 transition-transform">Add to Bill</button>
-        </div>
+    // --- App Init ---
+    function init() {
+        // Run existing itinerary UI functions if they exist in your file
+        if (typeof renderDateTabs === "function") renderDateTabs();
+        if (typeof renderCards === "function") renderCards(0);
+        if (typeof startCountdown === "function") startCountdown();
 
-        <div id="summarySection" class="hidden mt-8 border-t pt-5">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold text-slate-800">Results</h2>
-                <button onclick="window.copyWhatsApp()" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1">
-                    <span>WhatsApp Export</span>
-                </button>
-            </div>
-            <div id="expenseList" class="space-y-2 mb-6 max-h-48 overflow-y-auto bg-slate-50 p-3 rounded-lg text-xs border"></div>
-            <div id="settlementsList" class="bg-amber-50 p-4 rounded-xl border border-amber-200"></div>
-        </div>
-    </div>
+        setupMoneyUI();
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
-            authDomain: "gatherpay-5f59b.firebaseapp.com",
-            databaseURL: "https://gatherpay-5f59b-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "gatherpay-5f59b",
-            storageBucket: "gatherpay-5f59b.firebasestorage.app",
-            messagingSenderId: "827437997271",
-            appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-        const dataRef = ref(db, 'gatherPayData');
-
-        const friendsList = ["水", "柏", "舊", "輝", "鏗", "琳", "JOVI", "吹", "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN"];
-        let selectedSharers = new Set();
-
-        window.appData = { gatherings: {} };
-        window.currentGatheringId = null;
-
+        // Real-time Sync
         onValue(dataRef, (snapshot) => {
             const data = snapshot.val();
-            if (data) window.appData = data;
-            renderDropdown();
-            if(window.currentGatheringId) window.updateUI();
+            expenses = data ? Object.values(data) : [];
+            expenses.sort((a, b) => b.id - a.id);
+            updateMoneyUI();
+        });
+    }
+
+    // --- Money UI Setup ---
+    function setupMoneyUI() {
+        const sel = document.getElementById('m-payer');
+        const box = document.getElementById('m-targets');
+        if(!sel || !box) return;
+
+        sel.innerHTML = '<option>付款人</option>';
+        box.innerHTML = '';
+        
+        members.forEach(m => {
+            sel.innerHTML += `<option value="${m}">${m}</option>`;
+            box.innerHTML += `<div class="check-item checked" data-name="${m}" onclick="this.classList.toggle('checked')">${m}</div>`;
+        });
+    }
+
+    window.toggleAllChecks = function(isCheck) {
+        document.querySelectorAll('.check-item').forEach(el => {
+            isCheck ? el.classList.add('checked') : el.classList.remove('checked');
+        });
+    }
+
+    window.addExpense = function() {
+        const desc = document.getElementById('m-desc').value;
+        const amt = parseFloat(document.getElementById('m-amt').value);
+        const payer = document.getElementById('m-payer').value;
+        const targets = Array.from(document.querySelectorAll('.check-item.checked')).map(e => e.dataset.name);
+        
+        if(!desc || isNaN(amt) || payer === '付款人') return alert('請填寫完整項目、金額及付款人');
+        if(targets.length === 0) return alert('請至少選擇一人分擔');
+
+        const newId = Date.now();
+        const newExpense = { id: newId, desc, amt, payer, targets };
+
+        set(ref(db, 'kaohsiung_trip/expenses/' + newId), newExpense);
+
+        document.getElementById('m-desc').value = '';
+        document.getElementById('m-amt').value = '';
+    }
+
+    window.delExp = (id) => {
+        if(confirm('刪除這筆紀錄?')) set(ref(db, 'kaohsiung_trip/expenses/' + id), null);
+    };
+
+    window.clearAllData = function() {
+        if(confirm('注意：這會清除雲端所有人的數據！確定？')) set(ref(db, 'kaohsiung_trip/expenses'), null);
+    }
+
+    function updateMoneyUI() {
+        const list = document.getElementById('history-list');
+        const balDiv = document.getElementById('balance-list');
+        const resolveDiv = document.getElementById('resolve-list');
+        if(!list || !balDiv || !resolveDiv) return;
+
+        list.innerHTML = '';
+        balDiv.innerHTML = '';
+        resolveDiv.innerHTML = '';
+
+        let bals = {}; 
+        members.forEach(m => bals[m] = 0);
+        
+        expenses.forEach(e => {
+            if(bals.hasOwnProperty(e.payer)) bals[e.payer] += e.amt;
+            const split = e.amt / e.targets.length;
+            e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
+            
+            list.innerHTML += `
+                <div style="padding:10px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:13px;"><b>${e.desc}</b> $${e.amt.toFixed(1)} <span style="color:#999;">(${e.payer})</span></div>
+                    <div style="color:#FF6B6B; cursor:pointer; font-weight:bold; padding:5px 10px;" onclick="delExp(${e.id})">✕</div>
+                </div>`;
         });
 
-        window.saveData = () => set(dataRef, window.appData);
+        // Resolve Debts (Merge 琪 & SEAN)
+        let resolveList = [];
+        let coupleSum = (bals['琪'] || 0) + (bals['SEAN'] || 0);
 
-        function initFriendSelectors() {
-            const pList = document.getElementById('paidList');
-            const sList = document.getElementById('sharesList');
-            pList.innerHTML = ''; sList.innerHTML = '';
+        Object.keys(bals).forEach(m => {
+            if(m !== '琪' && m !== 'SEAN') {
+                resolveList.push({ name: m, val: bals[m] });
+            }
+        });
+        resolveList.push({ name: '琪 & SEAN ❤️', val: coupleSum });
 
-            friendsList.forEach(name => {
-                // Paid List
-                const btnP = document.createElement('button');
-                btnP.className = 'friend-btn p-btn';
-                btnP.innerText = name;
-                btnP.onclick = () => {
-                    document.querySelectorAll('.p-btn').forEach(b => b.classList.remove('selected'));
-                    btnP.classList.add('selected');
-                    document.getElementById('whoPaid').value = name;
-                };
-                pList.appendChild(btnP);
+        // Render Balance
+        resolveList.sort((a,b) => b.val - a.val).forEach(item => {
+            const val = item.val;
+            if(Math.abs(val) < 0.1) return;
+            const color = val > 0 ? '#27AE60' : '#C0392B';
+            balDiv.innerHTML += `
+                <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #f9f9f9; font-size:13px;">
+                    <span>${item.name}</span>
+                    <span style="color:${color}; font-weight:bold;">${val > 0 ? '+' : ''}${val.toFixed(1)}</span>
+                </div>`;
+        });
 
-                // Shares List
-                const btnS = document.createElement('button');
-                btnS.className = 'friend-btn s-btn';
-                btnS.innerText = name;
-                btnS.dataset.name = name;
-                btnS.onclick = () => {
-                    if(selectedSharers.has(name)) {
-                        selectedSharers.delete(name);
-                        btnS.classList.remove('selected');
-                    } else {
-                        selectedSharers.add(name);
-                        btnS.classList.add('selected');
-                    }
-                };
-                sList.appendChild(btnS);
-            });
-        }
-        initFriendSelectors();
+        // Debt Resolver Algorithm
+        let debtors = resolveList.filter(x => x.val < -0.1).sort((a,b) => a.val - b.val);
+        let creditors = resolveList.filter(x => x.val > 0.1).sort((a,b) => b.val - a.val);
 
-        window.bulkSelect = (selectAll) => {
-            selectedSharers.clear();
-            document.querySelectorAll('.s-btn').forEach(btn => {
-                if(selectAll) {
-                    selectedSharers.add(btn.dataset.name);
-                    btn.classList.add('selected');
-                } else {
-                    btn.classList.remove('selected');
-                }
-            });
-        };
-
-        window.createNewGathering = () => {
-            const name = document.getElementById('newGatheringName').value;
-            if(!name) return alert("Enter a name");
-            const id = 'g_' + Date.now();
-            if(!window.appData.gatherings) window.appData.gatherings = {};
-            window.appData.gatherings[id] = { name, date: new Date().toLocaleDateString(), expenses: [] };
-            window.currentGatheringId = id;
-            window.saveData();
-            document.getElementById('newGatheringName').value = '';
-        };
-
-        window.loadGathering = () => {
-            window.currentGatheringId = document.getElementById('gatheringSelect').value;
-            window.updateUI();
-        };
-
-        window.addExpense = () => {
-            const name = document.getElementById('itemName').value;
-            const cost = parseFloat(document.getElementById('itemCost').value);
-            const whoPaid = document.getElementById('whoPaid').value;
-            const whoShares = Array.from(selectedSharers).join(', ');
-
-            if (!name || isNaN(cost) || !whoPaid || selectedSharers.size === 0) 
-                return alert("Please select item, cost, payer, and at least one sharer.");
-
-            const g = window.appData.gatherings[window.currentGatheringId];
-            if(!g.expenses) g.expenses = [];
-            g.expenses.push({ name, cost, whoPaid, whoShares, id: Date.now() });
-            
-            // Reset
-            window.saveData();
-            document.getElementById('itemName').value = '';
-            document.getElementById('itemCost').value = '';
-        };
-
-        window.deleteExpense = (id) => {
-            const g = window.appData.gatherings[window.currentGatheringId];
-            g.expenses = g.expenses.filter(e => e.id !== id);
-            window.saveData();
-        };
-
-        window.updateUI = () => {
-            const g = window.appData.gatherings[window.currentGatheringId];
-            if(!g) return;
-            document.getElementById('expenseSection').classList.remove('hidden');
-            document.getElementById('summarySection').classList.remove('hidden');
-
-            const list = document.getElementById('expenseList');
-            list.innerHTML = (g.expenses || []).map(e => `
-                <div class="flex justify-between items-center py-2 border-b">
-                    <div>
-                        <span class="font-bold text-indigo-700">${e.whoPaid}</span>
-                        <span class="text-slate-400 mx-1">paid</span>
-                        <span class="font-bold text-slate-800">$${e.cost.toFixed(1)}</span>
-                        <span class="text-slate-500 ml-1">for ${e.name}</span>
-                    </div>
-                    <button onclick="window.deleteExpense(${e.id})" class="text-red-400 px-2 text-lg">×</button>
-                </div>
-            `).join('') || "<p class='text-center text-slate-400'>No items yet</p>";
-
-            calculateSettlements(g.expenses || []);
-        };
-
-        function renderDropdown() {
-            const select = document.getElementById('gatheringSelect');
-            const current = select.value;
-            select.innerHTML = '<option value="">-- Choose Gathering --</option>';
-            const gs = window.appData.gatherings || {};
-            Object.keys(gs).forEach(id => {
-                const opt = document.createElement('option');
-                opt.value = id;
-                opt.textContent = `${gs[id].name} (${gs[id].date})`;
-                if(id === current) opt.selected = true;
-                select.appendChild(opt);
-            });
-        }
-
-        let currentSettlementText = "";
-
-        function calculateSettlements(expenses) {
-            const balances = {};
-            expenses.forEach(e => {
-                const sharers = e.whoShares.split(',').map(s => s.trim()).filter(s => s !== "");
-                const share = e.cost / sharers.length;
-                balances[e.whoPaid] = (balances[e.whoPaid] || 0) + e.cost;
-                sharers.forEach(s => balances[s] = (balances[s] || 0) - share);
-            });
-
-            let html = '<h3 class="font-bold text-sm mb-3 text-amber-900 border-b border-amber-200 pb-1">Settlement Summary</h3>';
-            let whatsappText = `💰 *GatherPay: ${window.appData.gatherings[window.currentGatheringId].name}*\n\n`;
-            
-            let debtors = [], creditors = [];
-            Object.keys(balances).forEach(p => {
-                const b = balances[p];
-                if(b > 0.05) creditors.push({p, b});
-                else if(b < -0.05) debtors.push({p, b: Math.abs(b)});
-            });
-
-            let planHtml = '';
+        if(debtors.length === 0) {
+            resolveDiv.innerHTML = "🎉 目前沒有欠款！";
+        } else {
             debtors.forEach(d => {
+                let debtAmt = Math.abs(d.val);
                 creditors.forEach(c => {
-                    if(d.b > 0.05 && c.b > 0.05) {
-                        const pay = Math.min(d.b, c.b);
-                        const row = `➔ *${d.p}* pays *${c.p}* $${pay.toFixed(1)}`;
-                        planHtml += `<div class="py-1 text-slate-700">${row.replace(/\*/g, '')}</div>`;
-                        whatsappText += row + "\n";
-                        d.b -= pay; c.b -= pay;
-                    }
+                    if(debtAmt < 0.1 || c.val < 0.1) return;
+                    let settle = Math.min(debtAmt, c.val);
+                    resolveDiv.innerHTML += `➡️ <b>${d.name}</b> 俾 $${settle.toFixed(1)} 俾 <b>${c.name}</b><br>`;
+                    debtAmt -= settle;
+                    c.val -= settle;
                 });
             });
-
-            currentSettlementText = whatsappText + "\nGenerated via GatherPay";
-            document.getElementById('settlementsList').innerHTML = html + (planHtml || "All clear!");
         }
+    }
 
-        window.copyWhatsApp = () => {
-            navigator.clipboard.writeText(currentSettlementText).then(() => {
-                alert("Message copied! Now paste it into WhatsApp.");
-            });
-        };
-    </script>
-</body>
-</html>
+    window.shareSettlement = function() {
+        const div = document.getElementById('resolve-list');
+        let content = div.innerText;
+        if (!content || content.includes("目前沒有欠款")) return alert("無欠款紀錄");
+        let report = `📊 *[Gogogo 高雄 - 結算單]*\n\n${content}\n\n大家記得 PayMe / FPS 啦！💸`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
+    }
+
+    init();
+</script>
