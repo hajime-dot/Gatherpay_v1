@@ -277,13 +277,10 @@
             document.getElementById('rate-preview').innerHTML = '';
         }
 
-        // === 修正：標記為已支付的功能 ===
         window.markAsPaid = function(from, to, amtHKD) {
             if(!confirm(`確認標記：${from} 已經過數 HK$${amtHKD.toFixed(1)} 給 ${to} 嗎？`)) return;
 
             const newId = Date.now();
-            // 真正過數出錢的人 (from) 應該是 payer，這樣他的結餘會增加（減少欠款 / 變回 0）
-            // 真正收到錢的人 (to) 應該是 target，這樣他的結餘會扣除（減少應收款 / 變回 0）
             const settlementRecord = {
                 id: newId,
                 desc: `💸 [結算轉帳] ${from} -> ${to}`,
@@ -336,12 +333,17 @@
                 let isSettle = e.type === 'settlement';
                 let currencyInfo = (e.currency && e.currency !== 'HKD') ? `<br><span style="color:#95a5a6; font-size: 11px;">(原幣: ${e.currency} ${e.originalAmt} @ ${e.rate.toFixed(3)})</span>` : '';
 
+                // 新增：把 timestamp (e.id) 轉換成可讀的時間格式
+                let d = new Date(e.id);
+                let timeStr = `${d.getFullYear()}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+
                 list.innerHTML += `
                     <div class="history-row ${isSettle ? 'settlement' : ''}">
                         <div style="font-size:14px; line-height: 1.4;">
                             <b style="${isSettle ? 'color:#7f8c8d;' : ''}">${e.desc}</b> <br>
                             <span style="color:${isSettle ? '#9b59b6' : '#27ae60'}; font-weight:bold;">HK$${e.amt.toFixed(1)}</span> 
                             <span style="color:#7f8c8d; font-size: 12px;">(${isSettle ? '過數人' : '付款人'}: ${e.payer})</span>
+                            <span style="color:#95a5a6; font-size: 11px; margin-left: 6px;">[🕰️ ${timeStr}]</span>
                             ${currencyInfo}
                         </div>
                         <div class="delete-btn" onclick="delExp(${e.id})">刪除</div>
@@ -376,7 +378,6 @@
                         let settle = Math.min(debtAmt, c.val);
                         let convSettle = settle * displayRate;
 
-                        // 判斷轉帳對象 (如果是情侶，預設付給其中一人)
                         let rawFrom = d.name.includes('❤️') ? '琪' : d.name;
                         let rawTo = c.name.includes('❤️') ? '琪' : c.name;
 
