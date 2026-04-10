@@ -49,7 +49,12 @@
         .btn-whatsapp { background: #25D366; color: white; width: 100%; padding: 12px; font-size: 16px; margin-bottom: 15px;}
         .btn-danger { background: #e74c3c; color: white; width: 100%; padding: 12px; margin-top: 20px; }
         
+        /* Settlement style button */
+        .btn-mark-paid { background: #e8f4f8; color: #2980b9; padding: 4px 8px; font-size: 12px; border: 1px solid #2980b9; margin-left: 10px; }
+        .btn-mark-paid:hover { background: #d1e9f2; }
+
         .history-row { padding: 12px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .history-row.settlement { background-color: #fcfcfc; opacity: 0.8; }
         .history-row:last-child { border-bottom: none; }
         .delete-btn { color: #e74c3c; font-weight: bold; padding: 5px 10px; cursor: pointer; background: #ffeaea; border-radius: 6px; }
         
@@ -118,8 +123,8 @@
         <h4>個人結餘 (正數為應收款)</h4>
         <div id="balance-list" style="margin-bottom: 20px;"></div>
         
-        <h4>最終結算建議</h4>
-        <div id="resolve-list" style="margin-bottom: 20px; line-height: 1.8; font-size: 15px;"></div>
+        <h4>最終結算建議 (按 ✅ 標記已收款)</h4>
+        <div id="resolve-list" style="margin-bottom: 20px; line-height: 2.2; font-size: 15px;"></div>
         
         <button class="btn-whatsapp" onclick="shareSettlement()">WhatsApp 分享此清單</button>
         
@@ -129,7 +134,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, get, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // === 1. Firebase Configuration ===
         const firebaseConfig = {
@@ -155,35 +160,21 @@
         let currentGathering = localStorage.getItem('lastGathering') || "預設活動";
         let expenses = [];
         let unsubscribe = null;
-        
-        // Exchange Rates (Fallback values, updated on init)
         let exchangeRates = { HKD: 1, JPY: 19.5, TWD: 4.1, CNY: 0.92 };
 
-        // --- App Init ---
         async function init() {
             await fetchRates();
             setupMoneyUI();
-
-            // Listen to Gathering List
             onValue(ref(db, 'huatai_gatherpay/gathering_list'), (snapshot) => {
                 const data = snapshot.val();
-                if (data) {
-                    allGatherings = Object.values(data);
-                } else {
-                    allGatherings = ["預設活動"];
-                    set(ref(db, 'huatai_gatherpay/gathering_list'), allGatherings);
-                }
-
-                if (!allGatherings.includes(currentGathering)) {
-                    currentGathering = allGatherings[0];
-                }
-
+                if (data) { allGatherings = Object.values(data); } 
+                else { allGatherings = ["預設活動"]; set(ref(db, 'huatai_gatherpay/gathering_list'), allGatherings); }
+                if (!allGatherings.includes(currentGathering)) { currentGathering = allGatherings[0]; }
                 renderGatheringSelect();
                 listenToExpenses(currentGathering);
             });
         }
         
-        // --- Fetch Live Exchange Rates ---
         async function fetchRates() {
             try {
                 const res = await fetch('https://open.er-api.com/v6/latest/HKD');
@@ -193,28 +184,19 @@
                     exchangeRates.TWD = data.rates.TWD;
                     exchangeRates.CNY = data.rates.CNY;
                 }
-            } catch (e) {
-                console.warn("API 獲取匯率失敗，將使用系統預設匯率。");
-            }
+            } catch (e) { console.warn("API 獲取匯率失敗"); }
         }
 
-        // --- UI Interactions ---
         window.previewHKD = function() {
             const curr = document.getElementById('m-currency').value;
             const amt = parseFloat(document.getElementById('m-amt').value);
             const previewDiv = document.getElementById('rate-preview');
-            
-            if (isNaN(amt) || curr === 'HKD') {
-                previewDiv.innerHTML = '';
-                return;
-            }
-            
+            if (isNaN(amt) || curr === 'HKD') { previewDiv.innerHTML = ''; return; }
             const rate = exchangeRates[curr];
             const hkdAmt = amt / rate;
             previewDiv.innerHTML = `🔄 實時匯率: 1 HKD = ${rate.toFixed(4)} ${curr === 'CNY' ? 'RMB' : curr} (折合約 <b>HK$${hkdAmt.toFixed(1)}</b>)`;
         }
 
-        // --- Event/Gathering Management ---
         function renderGatheringSelect() {
             const select = document.getElementById('gathering-select');
             select.innerHTML = '';
@@ -230,22 +212,18 @@
         }
 
         window.newGathering = function() {
-            const name = prompt('請輸入新活動名稱 (例如: 2026-05 船河):');
+            const name = prompt('請輸入新活動名稱:');
             if (name && name.trim() !== '') {
                 if (!allGatherings.includes(name)) {
                     allGatherings.push(name);
                     set(ref(db, 'huatai_gatherpay/gathering_list'), allGatherings);
-                    changeGathering(name);
-                } else {
-                    alert('此活動名稱已存在，將為您切換至該活動。');
-                    changeGathering(name);
                 }
+                changeGathering(name);
             }
         }
 
         function listenToExpenses(gatheringName) {
             if (unsubscribe) unsubscribe(); 
-            
             const dataRef = ref(db, `huatai_gatherpay/gatherings/${gatheringName}/expenses`);
             unsubscribe = onValue(dataRef, (snapshot) => {
                 const data = snapshot.val();
@@ -255,15 +233,12 @@
             });
         }
 
-        // --- Money UI Setup ---
         function setupMoneyUI() {
             const sel = document.getElementById('m-payer');
             const box = document.getElementById('m-targets');
             if(!sel || !box) return;
-
             sel.innerHTML = '<option>請選擇付款人...</option>';
             box.innerHTML = '';
-            
             members.forEach(m => {
                 sel.innerHTML += `<option value="${m}">${m}</option>`;
                 box.innerHTML += `<div class="check-item checked" data-name="${m}" onclick="this.classList.toggle('checked')">${m}</div>`;
@@ -288,28 +263,40 @@
 
             let rate = 1;
             let hkdAmt = originalAmt;
-            if (currency !== 'HKD') {
-                rate = exchangeRates[currency];
-                hkdAmt = originalAmt / rate;
-            }
+            if (currency !== 'HKD') { rate = exchangeRates[currency]; hkdAmt = originalAmt / rate; }
 
             const newId = Date.now();
             const newExpense = { 
-                id: newId, 
-                desc, 
-                amt: hkdAmt, 
-                originalAmt, 
+                id: newId, desc, amt: hkdAmt, originalAmt, 
                 currency: currency === 'CNY' ? 'RMB' : currency, 
-                rate, 
-                payer, 
-                targets 
+                rate, payer, targets, type: 'expense' 
             };
-
             set(ref(db, `huatai_gatherpay/gatherings/${currentGathering}/expenses/${newId}`), newExpense);
-
             document.getElementById('m-desc').value = '';
             document.getElementById('m-amt').value = '';
             document.getElementById('rate-preview').innerHTML = '';
+        }
+
+        // === 新增：標記為已支付的功能 ===
+        window.markAsPaid = function(from, to, amtHKD) {
+            if(!confirm(`確認標記：${from} 已經過數 HK$${amtHKD.toFixed(1)} 給 ${to} 嗎？`)) return;
+
+            const newId = Date.now();
+            // 邏輯：收款人 (to) 變成「付款人」，付款人 (from) 變成「唯一分擔人」
+            // 這樣會讓 to 的結餘增加 (應收減少)，from 的結餘增加 (欠款減少)
+            const settlementRecord = {
+                id: newId,
+                desc: `💸 [結算轉帳] ${from} -> ${to}`,
+                amt: amtHKD,
+                originalAmt: amtHKD,
+                currency: 'HKD',
+                rate: 1,
+                payer: to,         // 收錢的人作為 payer，結餘會上升
+                targets: [from],   // 出錢的人作為 target，結餘會上升 (減少欠款)
+                type: 'settlement'
+            };
+
+            set(ref(db, `huatai_gatherpay/gatherings/${currentGathering}/expenses/${newId}`), settlementRecord);
         }
 
         window.delExp = (id) => {
@@ -319,153 +306,63 @@
         };
 
         window.clearCurrentGatheringData = function() {
-            if(confirm(`⚠️ 警告：這會永久清除「${currentGathering}」的所有記帳數據！確定要繼續嗎？`)) {
+            if(confirm(`⚠️ 警告：這會永久清除「${currentGathering}」的所有數據！`)) {
                 set(ref(db, `huatai_gatherpay/gatherings/${currentGathering}/expenses`), null);
             }
         }
 
-        // --- Pull Previous Debts ---
-        window.pullDebts = async function() {
-            let promptText = `請輸入要匯入欠款的「上一次活動名稱」:\n(目前存在的活動: ${allGatherings.join(', ')})`;
-            const prev = prompt(promptText);
-            
-            if(!prev || !allGatherings.includes(prev)) return alert('無效的活動名稱或已取消操作。');
-            if(prev === currentGathering) return alert('不能匯入目前正在進行的活動數據。');
-            
-            const snap = await get(ref(db, `huatai_gatherpay/gatherings/${prev}/expenses`));
-            const prevExp = snap.val() ? Object.values(snap.val()) : [];
-            
-            if (prevExp.length === 0) return alert('該活動沒有任何消費紀錄！');
-
-            let bals = {}; 
-            members.forEach(m => bals[m] = 0);
-            
-            prevExp.forEach(e => {
-                if(bals.hasOwnProperty(e.payer)) bals[e.payer] += e.amt;
-                const split = e.amt / e.targets.length;
-                e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
-            });
-
-            let coupleSum = (bals['琪'] || 0) + (bals['SEAN'] || 0);
-            let resolveList = [];
-            Object.keys(bals).forEach(m => {
-                if(m !== '琪' && m !== 'SEAN') resolveList.push({ name: m, val: bals[m] });
-            });
-            resolveList.push({ name: '琪 & SEAN ❤️', val: coupleSum });
-
-            let debtors = resolveList.filter(x => x.val < -0.1).sort((a,b) => a.val - b.val);
-            let creditors = resolveList.filter(x => x.val > 0.1).sort((a,b) => b.val - a.val);
-
-            let newExpenses = [];
-            
-            debtors.forEach(d => {
-                let debtAmt = Math.abs(d.val);
-                creditors.forEach(c => {
-                    if(debtAmt < 0.1 || c.val < 0.1) return;
-                    let settle = Math.min(debtAmt, c.val);
-                    
-                    let realTargets = d.name === '琪 & SEAN ❤️' ? ['琪', 'SEAN'] : [d.name];
-                    let creditorName = c.name === '琪 & SEAN ❤️' ? '琪' : c.name; 
-                    
-                    newExpenses.push({
-                        id: Date.now() + Math.floor(Math.random() * 1000),
-                        desc: `📌 結欠匯入 (${prev})`,
-                        amt: settle,
-                        originalAmt: settle,
-                        currency: 'HKD',
-                        rate: 1,
-                        payer: creditorName,
-                        targets: realTargets
-                    });
-                    
-                    debtAmt -= settle;
-                    c.val -= settle;
-                });
-            });
-
-            if(newExpenses.length === 0) {
-                return alert('該活動已經全部結清，沒有任何人有欠款！');
-            }
-
-            if (confirm(`找到 ${newExpenses.length} 筆結欠紀錄，準備匯入至「${currentGathering}」。確定嗎？`)) {
-                newExpenses.forEach(exp => {
-                    set(ref(db, `huatai_gatherpay/gatherings/${currentGathering}/expenses/${exp.id}`), exp);
-                });
-                alert('✅ 成功匯入欠款紀錄！');
-            }
-        }
-
-        // --- Render UI (History, Balance, Settlement) ---
         window.updateMoneyUI = function() {
             const list = document.getElementById('history-list');
             const balDiv = document.getElementById('balance-list');
             const resolveDiv = document.getElementById('resolve-list');
             if(!list || !balDiv || !resolveDiv) return;
 
-            // Settlement Display Currency config
             const displayCurr = document.getElementById('settle-currency').value || 'HKD';
             const displayRate = exchangeRates[displayCurr] || 1;
             const displaySymbol = displayCurr === 'CNY' ? 'RMB' : displayCurr;
             const prefix = displaySymbol === 'HKD' ? 'HK$' : displaySymbol + ' ';
 
-            list.innerHTML = '';
-            balDiv.innerHTML = '';
-            resolveDiv.innerHTML = '';
+            list.innerHTML = ''; balDiv.innerHTML = ''; resolveDiv.innerHTML = '';
 
-            let bals = {}; 
-            members.forEach(m => bals[m] = 0);
+            let bals = {}; members.forEach(m => bals[m] = 0);
             
-            if (expenses.length === 0) {
-                list.innerHTML = '<div style="color: #999; text-align: center; padding: 10px;">目前尚無消費紀錄</div>';
-            }
+            if (expenses.length === 0) { list.innerHTML = '<div style="color: #999; text-align: center; padding: 10px;">目前尚無消費紀錄</div>'; }
 
             expenses.forEach(e => {
-                // Background Math is always HKD
                 if(bals.hasOwnProperty(e.payer)) bals[e.payer] += e.amt;
                 const split = e.amt / e.targets.length;
                 e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
                 
-                let currencyInfo = '';
-                if (e.currency && e.currency !== 'HKD') {
-                    currencyInfo = `<br><span style="color:#95a5a6; font-size: 12px;">(原幣: ${e.currency} ${e.originalAmt} @ 匯率 ${e.rate.toFixed(4)})</span>`;
-                }
+                let isSettle = e.type === 'settlement';
+                let currencyInfo = (e.currency && e.currency !== 'HKD') ? `<br><span style="color:#95a5a6; font-size: 11px;">(原幣: ${e.currency} ${e.originalAmt} @ ${e.rate.toFixed(3)})</span>` : '';
 
                 list.innerHTML += `
-                    <div class="history-row">
+                    <div class="history-row ${isSettle ? 'settlement' : ''}">
                         <div style="font-size:14px; line-height: 1.4;">
-                            <b>${e.desc}</b> <br>
-                            <span style="color:#27ae60; font-weight:bold;">HK$${e.amt.toFixed(1)}</span> 
-                            <span style="color:#7f8c8d; font-size: 12px;">(付款: ${e.payer})</span>
+                            <b style="${isSettle ? 'color:#7f8c8d;' : ''}">${e.desc}</b> <br>
+                            <span style="color:${isSettle ? '#9b59b6' : '#27ae60'}; font-weight:bold;">HK$${e.amt.toFixed(1)}</span> 
+                            <span style="color:#7f8c8d; font-size: 12px;">(${isSettle ? '收款人' : '付款人'}: ${e.payer})</span>
                             ${currencyInfo}
                         </div>
                         <div class="delete-btn" onclick="delExp(${e.id})">刪除</div>
                     </div>`;
             });
 
-            // Resolve Debts (Merge 琪 & SEAN)
             let resolveList = [];
             let coupleSum = (bals['琪'] || 0) + (bals['SEAN'] || 0);
-
-            Object.keys(bals).forEach(m => {
-                if(m !== '琪' && m !== 'SEAN') {
-                    resolveList.push({ name: m, val: bals[m] });
-                }
-            });
+            Object.keys(bals).forEach(m => { if(m !== '琪' && m !== 'SEAN') resolveList.push({ name: m, val: bals[m] }); });
             resolveList.push({ name: '琪 & SEAN ❤️', val: coupleSum });
 
-            // Render Balance with Selected Display Currency
             resolveList.sort((a,b) => b.val - a.val).forEach(item => {
                 let convertedVal = item.val * displayRate;
                 if(Math.abs(convertedVal) < 0.1) return;
                 const color = convertedVal > 0 ? '#27AE60' : '#e74c3c';
-                balDiv.innerHTML += `
-                    <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f9f9f9; font-size:14px;">
-                        <span>${item.name}</span>
-                        <span style="color:${color}; font-weight:bold;">${convertedVal > 0 ? '+' : ''}${prefix}${convertedVal.toFixed(1)}</span>
-                    </div>`;
+                balDiv.innerHTML += `<div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f9f9f9; font-size:14px;">
+                    <span>${item.name}</span>
+                    <span style="color:${color}; font-weight:bold;">${convertedVal > 0 ? '+' : ''}${prefix}${convertedVal.toFixed(1)}</span>
+                </div>`;
             });
 
-            // Debt Resolver Algorithm with Selected Display Currency
             let debtors = resolveList.filter(x => x.val < -0.1).sort((a,b) => a.val - b.val);
             let creditors = resolveList.filter(x => x.val > 0.1).sort((a,b) => b.val - a.val);
 
@@ -477,13 +374,18 @@
                     creditors.forEach(c => {
                         if(debtAmt < 0.1 || c.val < 0.1) return;
                         let settle = Math.min(debtAmt, c.val);
-                        
-                        let convertedSettle = settle * displayRate;
-                        
-                        resolveDiv.innerHTML += `➡️ <b>${d.name}</b> 需支付 <span style="color:#e74c3c; font-weight:bold;">${prefix}${convertedSettle.toFixed(1)}</span> 給 <b>${c.name}</b><br>`;
-                        
-                        debtAmt -= settle;
-                        c.val -= settle;
+                        let convSettle = settle * displayRate;
+
+                        // 判斷轉帳對象 (如果是情侶，預設付給其中一人)
+                        let rawFrom = d.name.includes('❤️') ? '琪' : d.name;
+                        let rawTo = c.name.includes('❤️') ? '琪' : c.name;
+
+                        resolveDiv.innerHTML += `
+                            <div style="margin-bottom:8px;">
+                                ➡️ <b>${d.name}</b> 需支付 <span style="color:#e74c3c; font-weight:bold;">${prefix}${convSettle.toFixed(1)}</span> 給 <b>${c.name}</b>
+                                <button class="btn-mark-paid" onclick="markAsPaid('${rawFrom}', '${rawTo}', ${settle})">✅ 已過數</button>
+                            </div>`;
+                        debtAmt -= settle; c.val -= settle;
                     });
                 });
             }
@@ -491,13 +393,12 @@
 
         window.shareSettlement = function() {
             const div = document.getElementById('resolve-list');
-            let content = div.innerText;
-            if (!content || content.includes("目前沒有任何欠款")) return alert("無欠款紀錄可分享");
-            let report = `📊 *[華泰Gatherpay - ${currentGathering} 結算單]*\n\n${content}\n\n大家記得 PayMe / FPS / 轉數快啦！💸`;
+            let content = div.innerText.replace(/✅ 已過數/g, '');
+            if (!content || content.includes("沒有任何欠款")) return alert("無紀錄");
+            let report = `📊 *[華泰Gatherpay - ${currentGathering} 結算單]*\n\n${content}\n\n大家記得 PayMe / FPS 啦！💸`;
             window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
         }
 
-        // Boot up
         init();
     </script>
 </body>
