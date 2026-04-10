@@ -1,169 +1,268 @@
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-    // === 1. Firebase Configuration ===
-    const firebaseConfig = {
-        apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
-        authDomain: "gatherpay-5f59b.firebaseapp.com",
-        databaseURL: "https://gatherpay-5f59b-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "gatherpay-5f59b",
-        storageBucket: "gatherpay-5f59b.firebasestorage.app",
-        messagingSenderId: "827437997271",
-        appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const dataRef = ref(db, 'kaohsiung_trip/expenses');
-
-    // === 2. Updated Member List ===
-    const members = [
-        "水", "柏", "舊", "輝", "鏗", "琳", "JOVI", "吹", 
-        "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN"
-    ];
-    let expenses = [];
-
-    // --- App Init ---
-    function init() {
-        // Run existing itinerary UI functions if they exist in your file
-        if (typeof renderDateTabs === "function") renderDateTabs();
-        if (typeof renderCards === "function") renderCards(0);
-        if (typeof startCountdown === "function") startCountdown();
-
-        setupMoneyUI();
-
-        // Real-time Sync
-        onValue(dataRef, (snapshot) => {
-            const data = snapshot.val();
-            expenses = data ? Object.values(data) : [];
-            expenses.sort((a, b) => b.id - a.id);
-            updateMoneyUI();
-        });
-    }
-
-    // --- Money UI Setup ---
-    function setupMoneyUI() {
-        const sel = document.getElementById('m-payer');
-        const box = document.getElementById('m-targets');
-        if(!sel || !box) return;
-
-        sel.innerHTML = '<option>付款人</option>';
-        box.innerHTML = '';
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gogogo 高雄 - 結算單</title>
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            padding: 15px; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        h2 { text-align: center; color: #2c3e50; }
+        .section { margin-bottom: 20px; padding: 20px; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
         
-        members.forEach(m => {
-            sel.innerHTML += `<option value="${m}">${m}</option>`;
-            box.innerHTML += `<div class="check-item checked" data-name="${m}" onclick="this.classList.toggle('checked')">${m}</div>`;
-        });
-    }
-
-    window.toggleAllChecks = function(isCheck) {
-        document.querySelectorAll('.check-item').forEach(el => {
-            isCheck ? el.classList.add('checked') : el.classList.remove('checked');
-        });
-    }
-
-    window.addExpense = function() {
-        const desc = document.getElementById('m-desc').value;
-        const amt = parseFloat(document.getElementById('m-amt').value);
-        const payer = document.getElementById('m-payer').value;
-        const targets = Array.from(document.querySelectorAll('.check-item.checked')).map(e => e.dataset.name);
+        input, select { 
+            padding: 10px; 
+            margin: 8px 0; 
+            width: 100%; 
+            box-sizing: border-box; 
+            border: 1px solid #ccc; 
+            border-radius: 6px; 
+            font-size: 16px;
+        }
         
-        if(!desc || isNaN(amt) || payer === '付款人') return alert('請填寫完整項目、金額及付款人');
-        if(targets.length === 0) return alert('請至少選擇一人分擔');
-
-        const newId = Date.now();
-        const newExpense = { id: newId, desc, amt, payer, targets };
-
-        set(ref(db, 'kaohsiung_trip/expenses/' + newId), newExpense);
-
-        document.getElementById('m-desc').value = '';
-        document.getElementById('m-amt').value = '';
-    }
-
-    window.delExp = (id) => {
-        if(confirm('刪除這筆紀錄?')) set(ref(db, 'kaohsiung_trip/expenses/' + id), null);
-    };
-
-    window.clearAllData = function() {
-        if(confirm('注意：這會清除雲端所有人的數據！確定？')) set(ref(db, 'kaohsiung_trip/expenses'), null);
-    }
-
-    function updateMoneyUI() {
-        const list = document.getElementById('history-list');
-        const balDiv = document.getElementById('balance-list');
-        const resolveDiv = document.getElementById('resolve-list');
-        if(!list || !balDiv || !resolveDiv) return;
-
-        list.innerHTML = '';
-        balDiv.innerHTML = '';
-        resolveDiv.innerHTML = '';
-
-        let bals = {}; 
-        members.forEach(m => bals[m] = 0);
+        .check-item { 
+            display: inline-block; 
+            padding: 8px 12px; 
+            margin: 4px; 
+            border: 1px solid #bdc3c7; 
+            border-radius: 20px; 
+            cursor: pointer; 
+            font-size: 14px;
+            background-color: #fff;
+            transition: all 0.2s;
+        }
+        .check-item.checked { background-color: #3498db; color: white; border-color: #3498db; }
         
-        expenses.forEach(e => {
-            if(bals.hasOwnProperty(e.payer)) bals[e.payer] += e.amt;
-            const split = e.amt / e.targets.length;
-            e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
-            
-            list.innerHTML += `
-                <div style="padding:10px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:13px;"><b>${e.desc}</b> $${e.amt.toFixed(1)} <span style="color:#999;">(${e.payer})</span></div>
-                    <div style="color:#FF6B6B; cursor:pointer; font-weight:bold; padding:5px 10px;" onclick="delExp(${e.id})">✕</div>
-                </div>`;
-        });
+        button { border: none; border-radius: 6px; padding: 10px 15px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .btn-action { background: #ecf0f1; color: #333; margin-right: 5px; margin-bottom: 10px; }
+        .btn-submit { background: #27ae60; color: white; width: 100%; padding: 12px; margin-top: 10px; font-size: 16px; }
+        .btn-whatsapp { background: #25D366; color: white; width: 100%; padding: 12px; font-size: 16px; margin-bottom: 15px;}
+        .btn-danger { background: #e74c3c; color: white; width: 100%; padding: 12px; margin-top: 20px; }
+        
+        .history-row { padding: 12px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .history-row:last-child { border-bottom: none; }
+        .delete-btn { color: #e74c3c; font-weight: bold; padding: 5px 10px; cursor: pointer; background: #ffeaea; border-radius: 6px; }
+    </style>
+</head>
+<body>
 
-        // Resolve Debts (Merge 琪 & SEAN)
-        let resolveList = [];
-        let coupleSum = (bals['琪'] || 0) + (bals['SEAN'] || 0);
+    <h2>✈️ 高雄 Trip 記帳</h2>
 
-        Object.keys(bals).forEach(m => {
-            if(m !== '琪' && m !== 'SEAN') {
-                resolveList.push({ name: m, val: bals[m] });
-            }
-        });
-        resolveList.push({ name: '琪 & SEAN ❤️', val: coupleSum });
+    <div class="section">
+        <h3>新增消費</h3>
+        <input type="text" id="m-desc" placeholder="項目 (例如: 瑞豐夜市晚餐)">
+        <input type="number" id="m-amt" placeholder="金額 (TWD/HKD)">
+        <select id="m-payer"></select>
+        
+        <div style="margin-top: 15px;">
+            <b>分擔人:</b> <br><br>
+            <button class="btn-action" onclick="toggleAllChecks(true)">全選</button>
+            <button class="btn-action" onclick="toggleAllChecks(false)">全不選</button>
+            <div id="m-targets"></div>
+        </div>
+        
+        <button class="btn-submit" onclick="addExpense()">新增紀錄</button>
+    </div>
 
-        // Render Balance
-        resolveList.sort((a,b) => b.val - a.val).forEach(item => {
-            const val = item.val;
-            if(Math.abs(val) < 0.1) return;
-            const color = val > 0 ? '#27AE60' : '#C0392B';
-            balDiv.innerHTML += `
-                <div style="display:flex; justify-content:space-between; padding:8px; border-bottom:1px solid #f9f9f9; font-size:13px;">
-                    <span>${item.name}</span>
-                    <span style="color:${color}; font-weight:bold;">${val > 0 ? '+' : ''}${val.toFixed(1)}</span>
-                </div>`;
-        });
+    <div class="section">
+        <h3>歷史紀錄</h3>
+        <div id="history-list"></div>
+    </div>
 
-        // Debt Resolver Algorithm
-        let debtors = resolveList.filter(x => x.val < -0.1).sort((a,b) => a.val - b.val);
-        let creditors = resolveList.filter(x => x.val > 0.1).sort((a,b) => b.val - a.val);
+    <div class="section">
+        <h3>個人結餘 (正數為應收款)</h3>
+        <div id="balance-list"></div>
+    </div>
 
-        if(debtors.length === 0) {
-            resolveDiv.innerHTML = "🎉 目前沒有欠款！";
-        } else {
-            debtors.forEach(d => {
-                let debtAmt = Math.abs(d.val);
-                creditors.forEach(c => {
-                    if(debtAmt < 0.1 || c.val < 0.1) return;
-                    let settle = Math.min(debtAmt, c.val);
-                    resolveDiv.innerHTML += `➡️ <b>${d.name}</b> 俾 $${settle.toFixed(1)} 俾 <b>${c.name}</b><br>`;
-                    debtAmt -= settle;
-                    c.val -= settle;
-                });
+    <div class="section">
+        <h3>結算清單</h3>
+        <div id="resolve-list" style="margin-bottom: 20px; line-height: 1.8; font-size: 15px;"></div>
+        <button class="btn-whatsapp" onclick="shareSettlement()">WhatsApp 分享結算單</button>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
+        <button class="btn-danger" onclick="clearAllData()">⚠️ 清除所有數據</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // === 1. Firebase Configuration ===
+        const firebaseConfig = {
+            apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
+            authDomain: "gatherpay-5f59b.firebaseapp.com",
+            databaseURL: "https://gatherpay-5f59b-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "gatherpay-5f59b",
+            storageBucket: "gatherpay-5f59b.firebasestorage.app",
+            messagingSenderId: "827437997271",
+            appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const dataRef = ref(db, 'kaohsiung_trip/expenses');
+
+        // === 2. Updated Member List ===
+        const members = [
+            "水", "柏", "舊", "輝", "鏗", "琳", "JOVI", "吹", 
+            "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN"
+        ];
+        let expenses = [];
+
+        // --- App Init ---
+        function init() {
+            setupMoneyUI();
+
+            // Real-time Sync
+            onValue(dataRef, (snapshot) => {
+                const data = snapshot.val();
+                expenses = data ? Object.values(data) : [];
+                expenses.sort((a, b) => b.id - a.id);
+                updateMoneyUI();
             });
         }
-    }
 
-    window.shareSettlement = function() {
-        const div = document.getElementById('resolve-list');
-        let content = div.innerText;
-        if (!content || content.includes("目前沒有欠款")) return alert("無欠款紀錄");
-        let report = `📊 *[Gogogo 高雄 - 結算單]*\n\n${content}\n\n大家記得 PayMe / FPS 啦！💸`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
-    }
+        // --- Money UI Setup ---
+        function setupMoneyUI() {
+            const sel = document.getElementById('m-payer');
+            const box = document.getElementById('m-targets');
+            if(!sel || !box) return;
 
-    init();
-</script>
+            sel.innerHTML = '<option>請選擇付款人...</option>';
+            box.innerHTML = '';
+            
+            members.forEach(m => {
+                sel.innerHTML += `<option value="${m}">${m}</option>`;
+                box.innerHTML += `<div class="check-item checked" data-name="${m}" onclick="this.classList.toggle('checked')">${m}</div>`;
+            });
+        }
+
+        window.toggleAllChecks = function(isCheck) {
+            document.querySelectorAll('.check-item').forEach(el => {
+                isCheck ? el.classList.add('checked') : el.classList.remove('checked');
+            });
+        }
+
+        window.addExpense = function() {
+            const desc = document.getElementById('m-desc').value;
+            const amt = parseFloat(document.getElementById('m-amt').value);
+            const payer = document.getElementById('m-payer').value;
+            const targets = Array.from(document.querySelectorAll('.check-item.checked')).map(e => e.dataset.name);
+            
+            if(!desc || isNaN(amt) || payer === '請選擇付款人...') return alert('請填寫完整項目、金額及付款人');
+            if(targets.length === 0) return alert('請至少選擇一人分擔');
+
+            const newId = Date.now();
+            const newExpense = { id: newId, desc, amt, payer, targets };
+
+            set(ref(db, 'kaohsiung_trip/expenses/' + newId), newExpense);
+
+            document.getElementById('m-desc').value = '';
+            document.getElementById('m-amt').value = '';
+        }
+
+        window.delExp = (id) => {
+            if(confirm('確定要刪除這筆紀錄嗎?')) set(ref(db, 'kaohsiung_trip/expenses/' + id), null);
+        };
+
+        window.clearAllData = function() {
+            if(confirm('⚠️ 警告：這會永久清除雲端上所有人的記帳數據！確定要繼續嗎？')) {
+                set(ref(db, 'kaohsiung_trip/expenses'), null);
+            }
+        }
+
+        function updateMoneyUI() {
+            const list = document.getElementById('history-list');
+            const balDiv = document.getElementById('balance-list');
+            const resolveDiv = document.getElementById('resolve-list');
+            if(!list || !balDiv || !resolveDiv) return;
+
+            list.innerHTML = '';
+            balDiv.innerHTML = '';
+            resolveDiv.innerHTML = '';
+
+            let bals = {}; 
+            members.forEach(m => bals[m] = 0);
+            
+            if (expenses.length === 0) {
+                list.innerHTML = '<div style="color: #999; text-align: center; padding: 10px;">目前尚無消費紀錄</div>';
+            }
+
+            expenses.forEach(e => {
+                if(bals.hasOwnProperty(e.payer)) bals[e.payer] += e.amt;
+                const split = e.amt / e.targets.length;
+                e.targets.forEach(t => { if(bals.hasOwnProperty(t)) bals[t] -= split; });
+                
+                list.innerHTML += `
+                    <div class="history-row">
+                        <div style="font-size:14px; line-height: 1.4;">
+                            <b>${e.desc}</b> <br>
+                            <span style="color:#27ae60; font-weight:bold;">$${e.amt.toFixed(1)}</span> 
+                            <span style="color:#7f8c8d; font-size: 12px;">(付款: ${e.payer})</span>
+                        </div>
+                        <div class="delete-btn" onclick="delExp(${e.id})">刪除</div>
+                    </div>`;
+            });
+
+            // Resolve Debts (Merge 琪 & SEAN)
+            let resolveList = [];
+            let coupleSum = (bals['琪'] || 0) + (bals['SEAN'] || 0);
+
+            Object.keys(bals).forEach(m => {
+                if(m !== '琪' && m !== 'SEAN') {
+                    resolveList.push({ name: m, val: bals[m] });
+                }
+            });
+            resolveList.push({ name: '琪 & SEAN ❤️', val: coupleSum });
+
+            // Render Balance
+            resolveList.sort((a,b) => b.val - a.val).forEach(item => {
+                const val = item.val;
+                if(Math.abs(val) < 0.1) return;
+                const color = val > 0 ? '#27AE60' : '#e74c3c';
+                balDiv.innerHTML += `
+                    <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f9f9f9; font-size:14px;">
+                        <span>${item.name}</span>
+                        <span style="color:${color}; font-weight:bold;">${val > 0 ? '+' : ''}${val.toFixed(1)}</span>
+                    </div>`;
+            });
+
+            // Debt Resolver Algorithm
+            let debtors = resolveList.filter(x => x.val < -0.1).sort((a,b) => a.val - b.val);
+            let creditors = resolveList.filter(x => x.val > 0.1).sort((a,b) => b.val - a.val);
+
+            if(debtors.length === 0) {
+                resolveDiv.innerHTML = "🎉 太棒了，目前沒有任何欠款！";
+            } else {
+                debtors.forEach(d => {
+                    let debtAmt = Math.abs(d.val);
+                    creditors.forEach(c => {
+                        if(debtAmt < 0.1 || c.val < 0.1) return;
+                        let settle = Math.min(debtAmt, c.val);
+                        resolveDiv.innerHTML += `➡️ <b>${d.name}</b> 需支付 <span style="color:#e74c3c; font-weight:bold;">$${settle.toFixed(1)}</span> 給 <b>${c.name}</b><br>`;
+                        debtAmt -= settle;
+                        c.val -= settle;
+                    });
+                });
+            }
+        }
+
+        window.shareSettlement = function() {
+            const div = document.getElementById('resolve-list');
+            let content = div.innerText;
+            if (!content || content.includes("目前沒有任何欠款")) return alert("無欠款紀錄可分享");
+            let report = `📊 *[Gogogo 高雄 - 結算單]*\n\n${content}\n\n大家記得 PayMe / FPS 啦！💸`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank');
+        }
+
+        init();
+    </script>
+</body>
+</html>
