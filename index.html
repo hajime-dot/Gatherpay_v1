@@ -6,48 +6,55 @@
     <title>GatherPay 💸</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <style>
+        .friend-tag { @apply px-2 py-1 bg-white border border-indigo-200 rounded text-xs cursor-pointer active:bg-indigo-500 active:text-white transition-colors; }
+    </style>
 </head>
-<body class="bg-slate-50 p-4 font-sans text-slate-900">
+<body class="bg-slate-50 p-2 font-sans text-slate-900">
 
-    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-5 border border-slate-100">
-        <h1 class="text-3xl font-extrabold text-center text-indigo-600 mb-6">GatherPay</h1>
+    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-4 border border-slate-100">
+        <h1 class="text-2xl font-extrabold text-center text-indigo-600 mb-4">GatherPay</h1>
 
-        <div class="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-center">
-            <label class="block text-sm font-bold text-indigo-900 mb-1">Current Activity</label>
-            <select id="gatheringSelect" class="w-full p-3 bg-white border rounded-lg mb-3 shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none" onchange="window.loadGathering()">
+        <div class="mb-4 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+            <select id="gatheringSelect" class="w-full p-2 bg-white border rounded-lg mb-2 shadow-sm text-sm" onchange="window.loadGathering()">
                 <option value="">-- Choose Gathering --</option>
             </select>
-            
             <div class="flex gap-2">
-                <input type="text" id="newGatheringName" placeholder="e.g., Friday Dinner" class="flex-1 p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-                <button onclick="window.createNewGathering()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold transition-colors">Create</button>
+                <input type="text" id="newGatheringName" placeholder="New Event" class="flex-1 p-2 border rounded-lg text-sm">
+                <button onclick="window.createNewGathering()" class="bg-indigo-600 text-white px-3 py-2 rounded-lg font-bold text-sm">Create</button>
             </div>
         </div>
 
-        <div id="expenseSection" class="hidden space-y-4 border-t pt-4">
-            <h2 class="text-lg font-bold text-slate-700">Add Item / Scan Receipt</h2>
-            
-            <div class="p-3 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 text-center">
-                <input type="file" id="receiptImage" accept="image/*" class="text-xs mb-2 block w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
-                <button id="scanBtn" onclick="window.scanReceipt()" class="bg-slate-700 text-white w-full py-2 rounded-lg text-sm font-semibold active:bg-slate-800">AI Scan Receipt</button>
-                <p id="scanStatus" class="text-xs text-slate-500 mt-1 italic"></p>
+        <div id="expenseSection" class="hidden space-y-3 border-t pt-3">
+            <div class="p-2 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 text-center">
+                <input type="file" id="receiptImage" accept="image/*" class="text-[10px] mb-1 block w-full">
+                <button id="scanBtn" onclick="window.scanReceipt()" class="bg-slate-700 text-white w-full py-2 rounded-lg text-xs font-semibold">AI Scan (CN/EN)</button>
+                <p id="scanStatus" class="text-[10px] text-slate-500 mt-1 italic"></p>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-                <input type="text" id="itemName" placeholder="Item Name" class="p-3 border rounded-lg col-span-2 shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
-                <input type="number" id="itemCost" placeholder="Cost ($)" class="p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
-                <input type="text" id="whoPaid" placeholder="Who paid?" class="p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
-                <input type="text" id="whoShares" placeholder="Who shares? (Ken, May, Joe)" class="p-3 border rounded-lg col-span-2 shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
+            <div class="space-y-2">
+                <input type="text" id="itemName" placeholder="Item Name (e.g. 滴滴出行)" class="w-full p-2 border rounded-lg text-sm">
+                <input type="number" id="itemCost" placeholder="Cost ($)" class="w-full p-2 border rounded-lg text-sm">
+                
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase">Who Paid?</label>
+                    <input type="text" id="whoPaid" class="w-full p-2 border rounded-lg text-sm mb-1" placeholder="Type or tap below">
+                    <div id="friendsPaid" class="flex flex-wrap gap-1 mt-1"></div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-bold text-slate-500 uppercase">Who Shares?</label>
+                    <input type="text" id="whoShares" class="w-full p-2 border rounded-lg text-sm mb-1" placeholder="Separate with commas">
+                    <div id="friendsShares" class="flex flex-wrap gap-1 mt-1"></div>
+                </div>
             </div>
-            <button onclick="window.addExpense()" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-100 active:scale-95 transition-transform">Add to Bill</button>
+            <button onclick="window.addExpense()" class="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-transform">Add to Bill</button>
         </div>
 
-        <div id="summarySection" class="hidden mt-8 border-t pt-4">
-            <h2 class="text-lg font-bold mb-3 text-slate-700">Live Breakdown</h2>
-            <div id="expenseList" class="space-y-2 mb-4 max-h-48 overflow-y-auto bg-slate-50 p-3 rounded-lg text-sm border">
-                </div>
-            <div id="settlementsList" class="bg-amber-50 p-4 rounded-xl border border-amber-200 shadow-inner">
-                </div>
+        <div id="summarySection" class="hidden mt-6 border-t pt-3">
+            <h2 class="text-sm font-bold mb-2 text-slate-700">Expense List</h2>
+            <div id="expenseList" class="space-y-1 mb-4 max-h-40 overflow-y-auto text-xs"></div>
+            <div id="settlementsList" class="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs"></div>
         </div>
     </div>
 
@@ -55,7 +62,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        // Your specific Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
             authDomain: "gatherpay-5f59b.firebaseapp.com",
@@ -66,29 +72,52 @@
             appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const dataRef = ref(db, 'gatherPayData');
 
+        const friends = ["水", "柏", "舊", "輝", "鏗", "琳", "JOVI", "吹", "邦", "BOYI", "鳳", "如", "ERICA", "SOPO", "琪", "SEAN"];
+
         window.appData = { gatherings: {} };
         window.currentGatheringId = null;
 
-        // Real-time listener: Syncs data across all phones instantly
         onValue(dataRef, (snapshot) => {
             const data = snapshot.val();
-            if (data) {
-                window.appData = data;
-                renderDropdown();
-                if(window.currentGatheringId) window.updateUI();
-            }
+            if (data) window.appData = data;
+            renderDropdown();
+            if(window.currentGatheringId) window.updateUI();
         });
 
         window.saveData = () => set(dataRef, window.appData);
 
+        // UI HELPERS FOR FRIENDS
+        function setupFriendLists() {
+            const paidDiv = document.getElementById('friendsPaid');
+            const shareDiv = document.getElementById('friendsShares');
+            paidDiv.innerHTML = ''; shareDiv.innerHTML = '';
+
+            friends.forEach(f => {
+                const tagP = document.createElement('div');
+                tagP.className = 'friend-tag'; tagP.innerText = f;
+                tagP.onclick = () => document.getElementById('whoPaid').value = f;
+                paidDiv.appendChild(tagP);
+
+                const tagS = document.createElement('div');
+                tagS.className = 'friend-tag'; tagS.innerText = f;
+                tagS.onclick = () => {
+                    let current = document.getElementById('whoShares').value;
+                    let list = current ? current.split(',').map(x => x.trim()) : [];
+                    if (!list.includes(f)) list.push(f);
+                    document.getElementById('whoShares').value = list.join(', ');
+                };
+                shareDiv.appendChild(tagS);
+            });
+        }
+        setupFriendLists();
+
         window.createNewGathering = () => {
             const name = document.getElementById('newGatheringName').value;
-            if(!name) return alert("Please enter a name for the gathering.");
+            if(!name) return;
             const id = 'g_' + Date.now();
             if(!window.appData.gatherings) window.appData.gatherings = {};
             window.appData.gatherings[id] = { name, date: new Date().toLocaleDateString(), expenses: [] };
@@ -107,32 +136,37 @@
             const cost = parseFloat(document.getElementById('itemCost').value);
             const whoPaid = document.getElementById('whoPaid').value.trim();
             const whoShares = document.getElementById('whoShares').value.trim();
-            
-            if (!name || isNaN(cost) || !whoPaid || !whoShares) return alert("Please fill in all fields.");
+            if (!name || isNaN(cost) || !whoPaid || !whoShares) return alert("Fill all fields");
 
             const g = window.appData.gatherings[window.currentGatheringId];
             if(!g.expenses) g.expenses = [];
-            g.expenses.push({ name, cost, whoPaid, whoShares });
-            
+            g.expenses.push({ name, cost, whoPaid, whoShares, id: Date.now() });
             window.saveData();
             document.getElementById('itemName').value = '';
             document.getElementById('itemCost').value = '';
         };
 
+        window.deleteExpense = (id) => {
+            if(!confirm("Delete this entry?")) return;
+            const g = window.appData.gatherings[window.currentGatheringId];
+            g.expenses = g.expenses.filter(e => e.id !== id);
+            window.saveData();
+        };
+
         window.scanReceipt = async () => {
             const fileInput = document.getElementById('receiptImage');
             const status = document.getElementById('scanStatus');
-            if (!fileInput.files[0]) return alert('Select receipt image first.');
-            
-            status.textContent = "AI is reading... ⏳";
+            if (!fileInput.files[0]) return alert('Select image');
+            status.textContent = "AI Reading (Traditional Chinese)... ⏳";
             try {
-                const { data: { text } } = await Tesseract.recognize(fileInput.files[0], 'eng');
-                // Extract first line or potential price
+                // ADDED 'chi_tra' for Traditional Chinese
+                const { data: { text } } = await Tesseract.recognize(fileInput.files[0], 'chi_tra+eng');
                 document.getElementById('itemName').value = text.substring(0,30).replace(/\n/g, ' ');
-                status.textContent = "Done! Check the details below.";
-            } catch (e) { 
-                status.textContent = "Error scanning. Please type manually."; 
-            }
+                // Simple cost detection
+                const priceMatch = text.match(/[\d.]+/g);
+                if(priceMatch) document.getElementById('itemCost').value = priceMatch.sort((a,b) => b.length - a.length)[0];
+                status.textContent = "Done! Check name and cost.";
+            } catch (e) { status.textContent = "Scan error."; }
         };
 
         window.updateUI = () => {
@@ -142,19 +176,14 @@
             document.getElementById('summarySection').classList.remove('hidden');
 
             const list = document.getElementById('expenseList');
-            const expenses = g.expenses || [];
-            list.innerHTML = expenses.map(e => `
-                <div class="border-b py-2 flex justify-between items-start">
-                    <div>
-                        <span class="font-bold text-indigo-700">${e.whoPaid}</span>
-                        <span class="text-slate-500 text-xs ml-1">paid for ${e.name}</span>
-                        <div class="text-[10px] text-slate-400">Shared by: ${e.whoShares}</div>
-                    </div>
-                    <span class="font-bold text-slate-700">$${e.cost.toFixed(2)}</span>
+            list.innerHTML = (g.expenses || []).map(e => `
+                <div class="flex justify-between items-center bg-slate-50 p-2 border-b">
+                    <div><b>${e.whoPaid}</b>: $${e.cost.toFixed(2)} (${e.name})</div>
+                    <button onclick="window.deleteExpense(${e.id})" class="text-red-400 p-1">🗑️</button>
                 </div>
-            `).join('') || "<p class='text-slate-400 italic text-center'>No items added yet.</p>";
+            `).join('') || "No items yet.";
 
-            calculateSettlements(expenses);
+            calculateSettlements(g.expenses || []);
         };
 
         function renderDropdown() {
@@ -176,46 +205,29 @@
             expenses.forEach(e => {
                 const sharers = e.whoShares.split(',').map(s => s.trim()).filter(s => s !== "");
                 const share = e.cost / sharers.length;
-                
                 balances[e.whoPaid] = (balances[e.whoPaid] || 0) + e.cost;
-                sharers.forEach(s => {
-                    balances[s] = (balances[s] || 0) - share;
-                });
+                sharers.forEach(s => balances[s] = (balances[s] || 0) - share);
             });
 
-            let html = '<h3 class="font-bold text-sm mb-2 text-amber-900 border-b border-amber-200 pb-1 text-center">Final Balances</h3><ul class="text-xs space-y-1 mb-4">';
+            let html = '<h3 class="font-bold mb-2">Balances:</h3>';
             let debtors = [], creditors = [];
-            
             Object.keys(balances).forEach(p => {
                 const b = balances[p];
                 if(b > 0.01) creditors.push({p, b});
                 else if(b < -0.01) debtors.push({p, b: Math.abs(b)});
-                
-                html += `<li class="flex justify-between">
-                    <span>${p}</span>
-                    <span class="${b >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">
-                        ${b >= 0 ? '+' : ''}$${b.toFixed(2)}
-                    </span>
-                </li>`;
+                html += `<div class="flex justify-between"><span>${p}</span><span class="${b >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">$${b.toFixed(2)}</span></div>`;
             });
-            
-            html += '</ul><h3 class="font-bold text-sm mb-2 text-amber-900 border-b border-amber-200 pb-1 text-center">Settlement Plan</h3>';
-
-            let planHtml = '';
+            html += '<hr class="my-2"><b>Settlement Plan:</b>';
             debtors.forEach(d => {
                 creditors.forEach(c => {
                     if(d.b > 0.01 && c.b > 0.01) {
                         const pay = Math.min(d.b, c.b);
-                        planHtml += `<div class="text-[11px] py-1 bg-white/50 rounded px-2 mb-1 border border-amber-100">
-                            <b>${d.p}</b> ⮕ pay <b>${c.p}</b> <span class="float-right font-bold text-amber-800">$${pay.toFixed(2)}</span>
-                        </div>`;
-                        d.b -= pay; 
-                        c.b -= pay;
+                        html += `<div class="py-1">➔ <b>${d.p}</b> pays <b>${c.p}</b> $${pay.toFixed(2)}</div>`;
+                        d.b -= pay; c.b -= pay;
                     }
                 });
             });
-            
-            document.getElementById('settlementsList').innerHTML = html + (planHtml || "<p class='text-center italic text-slate-400 py-2'>Everyone is settled!</p>");
+            document.getElementById('settlementsList').innerHTML = html;
         }
     </script>
 </body>
