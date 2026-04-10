@@ -1,60 +1,94 @@
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GatherPay 💸</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+</head>
+<body class="bg-slate-50 p-4 font-sans text-slate-900">
 
-    console.log("🚀 App starting...");
+    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-5 border border-slate-100">
+        <h1 class="text-3xl font-extrabold text-center text-indigo-600 mb-6">GatherPay</h1>
 
-    // ==========================================
-    // PASTE YOUR FIREBASE CONFIG BELOW
-    // Ensure every line has a comma at the end!
-    // ==========================================
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+        <div class="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-center">
+            <label class="block text-sm font-bold text-indigo-900 mb-1">Current Activity</label>
+            <select id="gatheringSelect" class="w-full p-3 bg-white border rounded-lg mb-3 shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none" onchange="window.loadGathering()">
+                <option value="">-- Choose Gathering --</option>
+            </select>
+            
+            <div class="flex gap-2">
+                <input type="text" id="newGatheringName" placeholder="e.g., Friday Dinner" class="flex-1 p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                <button onclick="window.createNewGathering()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold transition-colors">Create</button>
+            </div>
+        </div>
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
-  authDomain: "gatherpay-5f59b.firebaseapp.com",
-  databaseURL: "https://gatherpay-5f59b-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "gatherpay-5f59b",
-  storageBucket: "gatherpay-5f59b.firebasestorage.app",
-  messagingSenderId: "827437997271",
-  appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
-};
+        <div id="expenseSection" class="hidden space-y-4 border-t pt-4">
+            <h2 class="text-lg font-bold text-slate-700">Add Item / Scan Receipt</h2>
+            
+            <div class="p-3 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 text-center">
+                <input type="file" id="receiptImage" accept="image/*" class="text-xs mb-2 block w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                <button id="scanBtn" onclick="window.scanReceipt()" class="bg-slate-700 text-white w-full py-2 rounded-lg text-sm font-semibold active:bg-slate-800">AI Scan Receipt</button>
+                <p id="scanStatus" class="text-xs text-slate-500 mt-1 italic"></p>
+            </div>
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-    };
+            <div class="grid grid-cols-2 gap-2">
+                <input type="text" id="itemName" placeholder="Item Name" class="p-3 border rounded-lg col-span-2 shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
+                <input type="number" id="itemCost" placeholder="Cost ($)" class="p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
+                <input type="text" id="whoPaid" placeholder="Who paid?" class="p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
+                <input type="text" id="whoShares" placeholder="Who shares? (Ken, May, Joe)" class="p-3 border rounded-lg col-span-2 shadow-sm focus:ring-2 focus:ring-green-500 outline-none">
+            </div>
+            <button onclick="window.addExpense()" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-100 active:scale-95 transition-transform">Add to Bill</button>
+        </div>
 
-    try {
+        <div id="summarySection" class="hidden mt-8 border-t pt-4">
+            <h2 class="text-lg font-bold mb-3 text-slate-700">Live Breakdown</h2>
+            <div id="expenseList" class="space-y-2 mb-4 max-h-48 overflow-y-auto bg-slate-50 p-3 rounded-lg text-sm border">
+                </div>
+            <div id="settlementsList" class="bg-amber-50 p-4 rounded-xl border border-amber-200 shadow-inner">
+                </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // Your specific Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDrZTdCk-m24XLtI8NyaE5kLzE4tB7MlEM",
+            authDomain: "gatherpay-5f59b.firebaseapp.com",
+            databaseURL: "https://gatherpay-5f59b-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "gatherpay-5f59b",
+            storageBucket: "gatherpay-5f59b.firebasestorage.app",
+            messagingSenderId: "827437997271",
+            appId: "1:827437997271:web:f2ef02c6385ffda0f5e492"
+        };
+
+        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const dataRef = ref(db, 'gatherPayData');
-        console.log("✅ Firebase Connected!");
 
         window.appData = { gatherings: {} };
         window.currentGatheringId = null;
 
-        // Sync with Firebase
+        // Real-time listener: Syncs data across all phones instantly
         onValue(dataRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 window.appData = data;
-                renderGatheringDropdown();
+                renderDropdown();
                 if(window.currentGatheringId) window.updateUI();
             }
-            console.log("☁️ Data synced from cloud");
         });
 
         window.saveData = () => set(dataRef, window.appData);
 
-        // ATTACH FUNCTIONS TO WINDOW (So buttons can see them)
         window.createNewGathering = () => {
-            console.log("Button clicked: Create New");
             const name = document.getElementById('newGatheringName').value;
-            if(!name) return;
+            if(!name) return alert("Please enter a name for the gathering.");
             const id = 'g_' + Date.now();
             if(!window.appData.gatherings) window.appData.gatherings = {};
             window.appData.gatherings[id] = { name, date: new Date().toLocaleDateString(), expenses: [] };
@@ -73,36 +107,116 @@ const app = initializeApp(firebaseConfig);
             const cost = parseFloat(document.getElementById('itemCost').value);
             const whoPaid = document.getElementById('whoPaid').value.trim();
             const whoShares = document.getElementById('whoShares').value.trim();
-            if (!name || !cost || !whoPaid || !whoShares) return alert("Fill all fields");
+            
+            if (!name || isNaN(cost) || !whoPaid || !whoShares) return alert("Please fill in all fields.");
 
-            if(!window.appData.gatherings[window.currentGatheringId].expenses) 
-                window.appData.gatherings[window.currentGatheringId].expenses = [];
-
-            window.appData.gatherings[window.currentGatheringId].expenses.push({ name, cost, whoPaid, whoShares });
+            const g = window.appData.gatherings[window.currentGatheringId];
+            if(!g.expenses) g.expenses = [];
+            g.expenses.push({ name, cost, whoPaid, whoShares });
+            
+            window.saveData();
             document.getElementById('itemName').value = '';
             document.getElementById('itemCost').value = '';
-            window.saveData();
         };
 
-        // ... Keep the rest of your updateUI and renderGatheringDropdown functions here ...
-        // Just make sure they start with "window.functionName = () => {"
-        
-    } catch (error) {
-        console.error("❌ CRITICAL ERROR DURING BOOT:", error);
-    }
+        window.scanReceipt = async () => {
+            const fileInput = document.getElementById('receiptImage');
+            const status = document.getElementById('scanStatus');
+            if (!fileInput.files[0]) return alert('Select receipt image first.');
+            
+            status.textContent = "AI is reading... ⏳";
+            try {
+                const { data: { text } } = await Tesseract.recognize(fileInput.files[0], 'eng');
+                // Extract first line or potential price
+                document.getElementById('itemName').value = text.substring(0,30).replace(/\n/g, ' ');
+                status.textContent = "Done! Check the details below.";
+            } catch (e) { 
+                status.textContent = "Error scanning. Please type manually."; 
+            }
+        };
 
-    function renderGatheringDropdown() {
-        const select = document.getElementById('gatheringSelect');
-        if(!select) return;
-        const current = select.value;
-        select.innerHTML = '<option value="">-- Choose Gathering --</option>';
-        const gs = window.appData.gatherings || {};
-        Object.keys(gs).forEach(id => {
-            const opt = document.createElement('option');
-            opt.value = id;
-            opt.textContent = `${gs[id].name} (${gs[id].date})`;
-            if(id === current) opt.selected = true;
-            select.appendChild(opt);
-        });
-    }
-</script>
+        window.updateUI = () => {
+            const g = window.appData.gatherings[window.currentGatheringId];
+            if(!g) return;
+            document.getElementById('expenseSection').classList.remove('hidden');
+            document.getElementById('summarySection').classList.remove('hidden');
+
+            const list = document.getElementById('expenseList');
+            const expenses = g.expenses || [];
+            list.innerHTML = expenses.map(e => `
+                <div class="border-b py-2 flex justify-between items-start">
+                    <div>
+                        <span class="font-bold text-indigo-700">${e.whoPaid}</span>
+                        <span class="text-slate-500 text-xs ml-1">paid for ${e.name}</span>
+                        <div class="text-[10px] text-slate-400">Shared by: ${e.whoShares}</div>
+                    </div>
+                    <span class="font-bold text-slate-700">$${e.cost.toFixed(2)}</span>
+                </div>
+            `).join('') || "<p class='text-slate-400 italic text-center'>No items added yet.</p>";
+
+            calculateSettlements(expenses);
+        };
+
+        function renderDropdown() {
+            const select = document.getElementById('gatheringSelect');
+            const current = select.value;
+            select.innerHTML = '<option value="">-- Choose Gathering --</option>';
+            const gs = window.appData.gatherings || {};
+            Object.keys(gs).forEach(id => {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = `${gs[id].name} (${gs[id].date})`;
+                if(id === current) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
+
+        function calculateSettlements(expenses) {
+            const balances = {};
+            expenses.forEach(e => {
+                const sharers = e.whoShares.split(',').map(s => s.trim()).filter(s => s !== "");
+                const share = e.cost / sharers.length;
+                
+                balances[e.whoPaid] = (balances[e.whoPaid] || 0) + e.cost;
+                sharers.forEach(s => {
+                    balances[s] = (balances[s] || 0) - share;
+                });
+            });
+
+            let html = '<h3 class="font-bold text-sm mb-2 text-amber-900 border-b border-amber-200 pb-1 text-center">Final Balances</h3><ul class="text-xs space-y-1 mb-4">';
+            let debtors = [], creditors = [];
+            
+            Object.keys(balances).forEach(p => {
+                const b = balances[p];
+                if(b > 0.01) creditors.push({p, b});
+                else if(b < -0.01) debtors.push({p, b: Math.abs(b)});
+                
+                html += `<li class="flex justify-between">
+                    <span>${p}</span>
+                    <span class="${b >= 0 ? 'text-green-600' : 'text-red-600'} font-bold">
+                        ${b >= 0 ? '+' : ''}$${b.toFixed(2)}
+                    </span>
+                </li>`;
+            });
+            
+            html += '</ul><h3 class="font-bold text-sm mb-2 text-amber-900 border-b border-amber-200 pb-1 text-center">Settlement Plan</h3>';
+
+            let planHtml = '';
+            debtors.forEach(d => {
+                creditors.forEach(c => {
+                    if(d.b > 0.01 && c.b > 0.01) {
+                        const pay = Math.min(d.b, c.b);
+                        planHtml += `<div class="text-[11px] py-1 bg-white/50 rounded px-2 mb-1 border border-amber-100">
+                            <b>${d.p}</b> ⮕ pay <b>${c.p}</b> <span class="float-right font-bold text-amber-800">$${pay.toFixed(2)}</span>
+                        </div>`;
+                        d.b -= pay; 
+                        c.b -= pay;
+                    }
+                });
+            });
+            
+            document.getElementById('settlementsList').innerHTML = html + (planHtml || "<p class='text-center italic text-slate-400 py-2'>Everyone is settled!</p>");
+        }
+    </script>
+</body>
+</html>
