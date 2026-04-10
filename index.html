@@ -277,13 +277,13 @@
             document.getElementById('rate-preview').innerHTML = '';
         }
 
-        // === 新增：標記為已支付的功能 ===
+        // === 修正：標記為已支付的功能 ===
         window.markAsPaid = function(from, to, amtHKD) {
             if(!confirm(`確認標記：${from} 已經過數 HK$${amtHKD.toFixed(1)} 給 ${to} 嗎？`)) return;
 
             const newId = Date.now();
-            // 邏輯：收款人 (to) 變成「付款人」，付款人 (from) 變成「唯一分擔人」
-            // 這樣會讓 to 的結餘增加 (應收減少)，from 的結餘增加 (欠款減少)
+            // 真正過數出錢的人 (from) 應該是 payer，這樣他的結餘會增加（減少欠款 / 變回 0）
+            // 真正收到錢的人 (to) 應該是 target，這樣他的結餘會扣除（減少應收款 / 變回 0）
             const settlementRecord = {
                 id: newId,
                 desc: `💸 [結算轉帳] ${from} -> ${to}`,
@@ -291,8 +291,8 @@
                 originalAmt: amtHKD,
                 currency: 'HKD',
                 rate: 1,
-                payer: to,         // 收錢的人作為 payer，結餘會上升
-                targets: [from],   // 出錢的人作為 target，結餘會上升 (減少欠款)
+                payer: from,       
+                targets: [to],     
                 type: 'settlement'
             };
 
@@ -341,7 +341,7 @@
                         <div style="font-size:14px; line-height: 1.4;">
                             <b style="${isSettle ? 'color:#7f8c8d;' : ''}">${e.desc}</b> <br>
                             <span style="color:${isSettle ? '#9b59b6' : '#27ae60'}; font-weight:bold;">HK$${e.amt.toFixed(1)}</span> 
-                            <span style="color:#7f8c8d; font-size: 12px;">(${isSettle ? '收款人' : '付款人'}: ${e.payer})</span>
+                            <span style="color:#7f8c8d; font-size: 12px;">(${isSettle ? '過數人' : '付款人'}: ${e.payer})</span>
                             ${currencyInfo}
                         </div>
                         <div class="delete-btn" onclick="delExp(${e.id})">刪除</div>
