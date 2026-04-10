@@ -1,66 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GatherPay - Shared Bill Splitter</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
-</head>
-<body class="bg-slate-50 p-4 font-sans text-slate-900">
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    <div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl overflow-hidden p-5">
-        <h1 class="text-3xl font-extrabold text-center text-indigo-600 mb-6">GatherPay 💸</h1>
+    console.log("🚀 App starting...");
 
-        <div class="mb-6 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-            <label class="block text-sm font-bold text-indigo-900 mb-1">Select Activity</label>
-            <select id="gatheringSelect" class="w-full p-3 bg-white border rounded-lg mb-3 shadow-sm" onchange="window.loadGathering()">
-                <option value="">-- Choose Gathering --</option>
-            </select>
-            
-            <div class="flex gap-2">
-                <input type="text" id="newGatheringName" placeholder="New Event Name" class="flex-1 p-3 border rounded-lg shadow-sm">
-                <button onclick="window.createNewGathering()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold">Create</button>
-            </div>
-            <button onclick="window.rolloverDebts()" class="mt-3 text-xs text-indigo-500 underline block text-center w-full">Roll over unpaid debts from previous</button>
-        </div>
-
-        <div id="expenseSection" class="hidden space-y-4 border-t pt-4">
-            <h2 class="text-lg font-bold">Add Item / Scan Receipt</h2>
-            
-            <div class="p-3 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 text-center">
-                <input type="file" id="receiptImage" accept="image/*" class="text-xs mb-2 block w-full">
-                <button id="scanBtn" onclick="window.scanReceipt()" class="bg-slate-700 text-white w-full py-2 rounded-lg text-sm font-semibold">AI Scan Receipt</button>
-                <p id="scanStatus" class="text-xs text-slate-500 mt-1 italic"></p>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-                <input type="text" id="itemName" placeholder="Item Name" class="p-3 border rounded-lg col-span-2 shadow-sm">
-                <input type="number" id="itemCost" placeholder="Cost ($)" class="p-3 border rounded-lg shadow-sm">
-                <input type="text" id="whoPaid" placeholder="Who paid?" class="p-3 border rounded-lg shadow-sm">
-                <input type="text" id="whoShares" placeholder="Who shares? (e.g. Ken, May)" class="p-3 border rounded-lg col-span-2 shadow-sm">
-                <p class="text-[10px] text-slate-400 col-span-2 italic">Tip: Use commas for multiple names</p>
-            </div>
-            <button onclick="window.addExpense()" class="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-green-100 active:scale-95 transition-transform">Add to Bill</button>
-        </div>
-
-        <div id="summarySection" class="hidden mt-8 border-t pt-4">
-            <h2 class="text-lg font-bold mb-3">Results</h2>
-            <div id="expenseList" class="space-y-2 mb-4 max-h-48 overflow-y-auto bg-slate-50 p-3 rounded-lg text-sm"></div>
-            
-            <div id="settlementsList" class="bg-amber-50 p-4 rounded-xl border border-amber-200">
-                </div>
-        </div>
-    </div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-        // ==========================================
-        // PASTE YOUR FIREBASE CONFIG BELOW THIS LINE
-        // ==========================================
-       // Import the functions you need from the SDKs you need
+    // ==========================================
+    // PASTE YOUR FIREBASE CONFIG BELOW
+    // Ensure every line has a comma at the end!
+    // ==========================================
+// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -78,17 +26,18 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-        };
-        // ==========================================
+    };
 
+    try {
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const dataRef = ref(db, 'gatherPayData');
+        console.log("✅ Firebase Connected!");
 
         window.appData = { gatherings: {} };
         window.currentGatheringId = null;
 
-        // Sync with Cloud
+        // Sync with Firebase
         onValue(dataRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -96,11 +45,14 @@ const app = initializeApp(firebaseConfig);
                 renderGatheringDropdown();
                 if(window.currentGatheringId) window.updateUI();
             }
+            console.log("☁️ Data synced from cloud");
         });
 
         window.saveData = () => set(dataRef, window.appData);
 
+        // ATTACH FUNCTIONS TO WINDOW (So buttons can see them)
         window.createNewGathering = () => {
+            console.log("Button clicked: Create New");
             const name = document.getElementById('newGatheringName').value;
             if(!name) return;
             const id = 'g_' + Date.now();
@@ -116,5 +68,41 @@ const app = initializeApp(firebaseConfig);
             window.updateUI();
         };
 
-        window.scanReceipt = async () => {
-            const fileInput
+        window.addExpense = () => {
+            const name = document.getElementById('itemName').value;
+            const cost = parseFloat(document.getElementById('itemCost').value);
+            const whoPaid = document.getElementById('whoPaid').value.trim();
+            const whoShares = document.getElementById('whoShares').value.trim();
+            if (!name || !cost || !whoPaid || !whoShares) return alert("Fill all fields");
+
+            if(!window.appData.gatherings[window.currentGatheringId].expenses) 
+                window.appData.gatherings[window.currentGatheringId].expenses = [];
+
+            window.appData.gatherings[window.currentGatheringId].expenses.push({ name, cost, whoPaid, whoShares });
+            document.getElementById('itemName').value = '';
+            document.getElementById('itemCost').value = '';
+            window.saveData();
+        };
+
+        // ... Keep the rest of your updateUI and renderGatheringDropdown functions here ...
+        // Just make sure they start with "window.functionName = () => {"
+        
+    } catch (error) {
+        console.error("❌ CRITICAL ERROR DURING BOOT:", error);
+    }
+
+    function renderGatheringDropdown() {
+        const select = document.getElementById('gatheringSelect');
+        if(!select) return;
+        const current = select.value;
+        select.innerHTML = '<option value="">-- Choose Gathering --</option>';
+        const gs = window.appData.gatherings || {};
+        Object.keys(gs).forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = `${gs[id].name} (${gs[id].date})`;
+            if(id === current) opt.selected = true;
+            select.appendChild(opt);
+        });
+    }
+</script>
